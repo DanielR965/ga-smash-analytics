@@ -76,6 +76,19 @@ events_query = """query TournamentEvents($tournamentId: ID!) {
     }
 }"""
 
+entrants_query = """query EventEntrants($eventId: ID!, $page: Int!, $perPage: Int!) {
+    event(id: $eventId) {
+        entrants(query: { page: $page, perPage: $perPage }) {
+            nodes {
+                id
+                initialSeedNum
+                standing { placement }
+                participants { player { id gamerTag } }
+            }
+        }
+    }
+}"""
+
 
 # --- Functions ---------------------------------------------------------------
 
@@ -147,6 +160,20 @@ def fetch_page(page, after_date):
 
     return nodes
 
+def fetch_entrants(event_id):
+    entrants = []
+    page = 1
+    while True:
+        data = run_query(entrants_query, {"eventId": event_id, "page": page, "perPage": 50})
+        nodes = data["data"]["event"]["entrants"]["nodes"]
+        if not nodes:
+            break
+        entrants.extend(nodes)
+        if len(nodes) < 50:
+            break
+        page += 1
+    return entrants
+
 SIDE_EVENT_WORDS = ["redemption", "ladder", "squad strike", "doubles", "amateur", "grudge", "ice stage"]
 
 def is_main_singles(event):
@@ -215,6 +242,27 @@ for t in all_tournaments:
             "num_entrants": best["numEntrants"],
         })
 
+all_entrants = []
+
+for i, ev in enumerate(all_events, 1):
+    for en in fetch_entrants(ev["event_id"]):
+        # Guards: some entrants have no player linked or no standing (e.g. DQ'd).
+        participants = en["participants"] or []
+        player = participants[0]["player"] if participants else None
+        standing = en["standing"]
+
+        all_entrants.append((
+            en["id"],
+            ev["event_id"],
+            player["id"] if player else None,
+            player["gamerTag"] if player else None,
+            en["initialSeedNum"],
+            standing["placement"] if standing else None,
+        ))
+
+    if i % 50 == 0:
+        print(f"{i}/{len(all_events)} events")
+
 print(len(all_events))
 
 
@@ -255,6 +303,19 @@ con.executemany(
     "INSERT INTO events VALUES (?, ?, ?, ?)",
     [(e["event_id"], e["tournament_id"], e["name"], e["num_entrants"]) for e in all_events],
 )
+
+con.execute("""
+CREATE OR REPLACE TABLE entrants (
+    entrant_id BIGINT PRIMARY KEY,
+    event_id   BIGINT,
+    player_id  BIGINT,
+    gamer_tag  VARCHAR,
+    seed       INTEGER,
+    placement  INTEGER
+)
+""")
+
+con.executemany("INSERT INTO entrants VALUES (?, ?, ?, ?, ?, ?)", all_entrants)
 
 con.close()
 print("loaded into", DB_PATH)
