@@ -6,9 +6,11 @@ from google import genai
 from google.genai import types
 
 load_dotenv()
-client = genai.Client()  # reads GEMINI_API_KEY from the environment
+client = genai.Client(http_options=types.HttpOptions(timeout=60_000))  # reads GEMINI_API_KEY from the environment
 
-MODEL = "gemini-3.5-flash"
+#Tried in order; if one errors or times out (503/504 on the free tier), use the next.
+MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite"]
+MODEL = MODELS[0]  # evals.py prints this in the score line
 DB_PATH = "ga_smash.duckdb"
 ALLOWED_TABLES = {"tournaments", "events", "entrants"}
 MAX_ROWS = 200
@@ -42,11 +44,20 @@ def generate_sql(question, bad_sql=None, error=None):
     if bad_sql:
         content += f"\n\nThis SQL failed:\n{bad_sql}\nError: {error}\nWrite a corrected query."
 
-    resp = client.models.generate_content(
-        model=MODEL,
-        contents=content,
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-    )
+    last_error = None
+    for model in MODELS:
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=content,
+                config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+            )
+            break  # got an answer, stop trying models
+        except Exception as e:
+            print(f"  {model} failed: {str(e)[:80]}", flush=True)
+            last_error = e
+    else:
+        raise last_error  # every model failed
     text = resp.text.strip()
     # Models sometimes wrap SQL in ```sql fences anyway; strip them.
     return re.sub(r"^```(?:sql)?\s*|\s*```$", "", text).strip()
