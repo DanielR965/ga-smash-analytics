@@ -30,7 +30,7 @@ Notes:
 - seed: pre-tournament ranking within an event. 1 = top seed; lower number = stronger expected player.
 - placement: final result. Lower is better (1 = winner). Ties are normal (two 5ths, two 7ths, four 9ths...). Some placements are NULL; exclude them with placement IS NOT NULL when using placement.
 - An upset is when a player places better than their seed predicts (placement < seed) or worse (placement > seed).
-- A player's gamer_tag can change between events. Identify players by player_id (GROUP BY player_id) and show a tag with MAX(gamer_tag) or the most recent one.
+- gamer_tag is the player's current tag. Different players can share a tag, so identify players by player_id (GROUP BY player_id) and show a tag with MAX(gamer_tag).
 
 Rules:
 - Return exactly one SQL SELECT statement. No explanation, no markdown.

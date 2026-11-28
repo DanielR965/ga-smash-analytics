@@ -57,6 +57,26 @@ EVALS = [
         "question": "For players with at least 20 events where they have both a seed and a placement, return the player_id and the fraction of those events where they placed better than their seed.",
         "gold_sql": "SELECT player_id, AVG(CASE WHEN placement < seed THEN 1 ELSE 0 END) FROM entrants WHERE placement IS NOT NULL AND seed IS NOT NULL GROUP BY player_id HAVING COUNT(*) >= 20",
     },
+
+    {
+        "question": "Return each gamer tag that is used by more than one player, and the number of distinct players using it.",
+        "gold_sql": "SELECT gamer_tag, COUNT(DISTINCT player_id) FROM entrants GROUP BY gamer_tag HAVING COUNT(DISTINCT player_id) > 1",
+    },
+
+    {
+        "question": "For each main event with at least 64 entrants, return the tournament name and the player_id of the winner.",
+        "gold_sql": "SELECT t.name, en.player_id FROM entrants en JOIN events e ON en.event_id = e.event_id JOIN tournaments t ON e.tournament_id = t.tournament_id WHERE e.num_entrants >= 64 AND en.placement = 1",
+    },
+
+    {
+        "question": "For each month (as date_trunc('month', start_at)), return the month and the average number of entrants in main events that month.",
+        "gold_sql": "SELECT date_trunc('month', t.start_at) AS month, AVG(e.num_entrants) FROM events e JOIN tournaments t ON e.tournament_id = t.tournament_id GROUP BY month",
+    },
+
+    {
+        "question": "How many players entered events in at least 3 different months? Return a single number.",
+        "gold_sql": "WITH player_months AS (SELECT en.player_id, COUNT(DISTINCT date_trunc('month', t.start_at)) AS months FROM entrants en JOIN events e ON en.event_id = e.event_id JOIN tournaments t ON e.tournament_id = t.tournament_id GROUP BY en.player_id) SELECT COUNT(*) FROM player_months WHERE months >= 3",
+    },
 ]
 
 
