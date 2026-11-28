@@ -60,7 +60,7 @@ def generate_sql(question, bad_sql=None, error=None):
         raise last_error  # every model failed
     text = resp.text.strip()
     # Models sometimes wrap SQL in ```sql fences anyway; strip them.
-    return re.sub(r"^```(?:sql)?\s*|\s*```$", "", text).strip()
+    return re.sub(r"^```(?:sql)?\s*|\s*```$", "", text).strip(), model
 
 
 def validate_sql(sql):
@@ -101,14 +101,14 @@ def run_sql(sql):
 
 def ask(question):
     """Full flow with one retry. Returns (sql, cols, rows); raises if the retry also fails."""
-    sql = generate_sql(question)
+    sql, model = generate_sql(question)
     try:
         sql = validate_sql(sql)
-        return (sql, *run_sql(sql))
+        return (sql, model, *run_sql(sql))
     except Exception as e:
         sql = generate_sql(question, bad_sql=sql, error=str(e))
         sql = validate_sql(sql)
-        return (sql, *run_sql(sql))
+        return (sql, model, *run_sql(sql))
     
 if __name__ == "__main__":
     for bad in ["DROP TABLE events", "SELECT 1; DROP TABLE events", "SELECT * FROM secrets"]:
@@ -118,7 +118,7 @@ if __name__ == "__main__":
         except ValueError as e:
             print("blocked:", bad, "->", e)
 
-    sql, cols, rows = ask("Which 5 events had the most entrants?")
+    sql, model, cols, rows = ask("Which 5 events had the most entrants?")
     print(sql)
     print(cols)
     for r in rows:

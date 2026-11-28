@@ -1,6 +1,6 @@
 import time
 from collections import Counter
-from ask import ask, run_sql, MODEL
+from ask import ask, run_sql
 
 EVALS = [
     {
@@ -32,6 +32,31 @@ EVALS = [
         "question": "How many entrants placed better than their seed? Ignore entrants with no placement. Return a single number.",
         "gold_sql": "SELECT COUNT(*) FROM entrants WHERE placement IS NOT NULL AND placement < seed",
     },
+
+    {
+        "question": "How many distinct players entered at least one event? Return a single number.",
+        "gold_sql": "SELECT COUNT(DISTINCT player_id) FROM entrants",
+    },
+
+    {
+        "question": "How many tournaments have no main event in the events table? Return a single number.",
+        "gold_sql": "SELECT COUNT(*) FROM tournaments t LEFT JOIN events e ON t.tournament_id = e.tournament_id WHERE e.event_id IS NULL",
+    },
+
+    {
+        "question": "Return the player_id and number of wins (placement 1) for every player with at least 5 wins.",
+        "gold_sql": "SELECT player_id, COUNT(*) FROM entrants WHERE placement = 1 GROUP BY player_id HAVING COUNT(*) >= 5",
+    },
+
+    {
+        "question": "Return the tournament name, num_attendees, and the main event's num_entrants for tournaments where num_attendees is more than twice the main event's num_entrants.",
+        "gold_sql": "SELECT t.name, t.num_attendees, e.num_entrants FROM events e JOIN tournaments t ON e.tournament_id = t.tournament_id WHERE t.num_attendees > 2 * e.num_entrants",
+    },
+
+    {
+        "question": "For players with at least 20 events where they have both a seed and a placement, return the player_id and the fraction of those events where they placed better than their seed.",
+        "gold_sql": "SELECT player_id, AVG(CASE WHEN placement < seed THEN 1 ELSE 0 END) FROM entrants WHERE placement IS NOT NULL AND seed IS NOT NULL GROUP BY player_id HAVING COUNT(*) >= 20",
+    },
 ]
 
 
@@ -45,18 +70,19 @@ def normalize(rows):
 
 
 def results_match(gold_rows, pred_rows):
-    ...  # you write this (one line)
     return normalize(gold_rows) == normalize(pred_rows)
 
 
 def main():
     passed = 0
     errors = 0
+    models_used = Counter()
     for i, case in enumerate(EVALS, 1):
         print(f"running {i}/{len(EVALS)}...", flush=True)
         _, gold_rows = run_sql(case["gold_sql"])
         try:
-            sql, _, pred_rows = ask(case["question"])
+            sql, model, _, pred_rows = ask(case["question"])
+            models_used[model] += 1
             ok = results_match(gold_rows, pred_rows)
             note = ""
         except Exception as e:  # model error, guardrail block, or 503
@@ -70,7 +96,8 @@ def main():
         time.sleep(7)  # stay under the free tier's requests-per-minute limit
 
     answered = len(EVALS) - errors
-    print(f"\n{MODEL}: {passed}/{len(EVALS)} = {passed / len(EVALS):.0%}")
+    print(f"\n{passed}/{len(EVALS)} = {passed / len(EVALS):.0%}")
+    print(f"answered by: {dict(models_used)}")
     print(f"errors (API/guardrail, not wrong SQL): {errors}")
     if answered:
         print(f"accuracy on answered questions: {passed}/{answered} = {passed / answered:.0%}")
@@ -78,6 +105,3 @@ def main():
  
 if __name__ == "__main__":
     main()
-
-
-

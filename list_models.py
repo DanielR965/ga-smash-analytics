@@ -1,10 +1,5 @@
-from dotenv import load_dotenv
-from google import genai
-import os
-
-load_dotenv()
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
+# Print every model your key can call that supports generate_content.
+from ask import client
 for m in client.models.list():
-    if "flash" in m.name:
+    if "generateContent" in (m.supported_actions or []):
         print(m.name)
